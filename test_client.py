@@ -25,8 +25,11 @@ def submit_financial_data(api_url: str, raw_text: Union[str, List[str]]) -> None
         for i, text in enumerate(raw_text):
             print(f"\nSubmitting item {i+1} of {len(raw_text)}:")
             _submit_single_item(api_url, text)
-    else:
+    elif isinstance(raw_text, str):
         _submit_single_item(api_url, raw_text)
+    else:
+        print("Invalid input type for raw_text. It should be a string or a list of strings.")
+        sys.exit(1)
 
 
 def _submit_single_item(api_url: str, raw_text: str) -> None:

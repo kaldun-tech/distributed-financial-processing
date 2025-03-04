@@ -35,7 +35,7 @@ class OpenAIConfig:
     OpenAI configuration.
     """
     API_KEY: str = os.getenv("OPENAI_API_KEY", "")
-    MODEL: str = "gpt-4"
+    MODEL: str = "gpt-4o"
     MAX_TOKENS: int = 1000
     TEMPERATURE: float = 0.0
 
