@@ -20,12 +20,48 @@ A distributed system for processing financial data using RabbitMQ, OpenAI's Chat
 
 ## Setup and Installation
 
-1. Clone the repository
-2. Install dependencies: `pip install -r requirements.txt`
-3. Set up environment variables (see `.env.example`)
-4. Start RabbitMQ and MongoDB (using Docker Compose): `docker-compose up -d`
-5. Start the producer service: `python -m producer.main`
-6. Start the worker service: `python -m worker.main`
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/kaldun-tech/distributed-financial-processing.git
+   cd distributed-financial-processing
+   ```
+
+2. Set up a virtual environment (recommended):
+   ```bash
+   # On Windows
+   python -m venv venv
+   venv\Scripts\activate
+
+   # On macOS/Linux
+   python -m venv venv
+   source venv/bin/activate
+   ```
+
+3. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. Set up environment variables (see `.env.example`):
+   ```bash
+   # Copy the example file and edit with your values
+   cp .env.example .env
+   ```
+
+5. Start RabbitMQ and MongoDB (using Docker Compose):
+   ```bash
+   docker-compose up -d
+   ```
+
+6. Start the producer service:
+   ```bash
+   python -m producer.main
+   ```
+
+7. Start the worker service:
+   ```bash
+   python -m worker.main
+   ```
 
 ## API Endpoints
 
@@ -109,3 +145,20 @@ You can add your own sample data by following this format or creating a new CSV 
 │   ├── models.py             # Shared data models
 │   └── utils.py              # Utility functions
 └── test_client.py            # Test client for the API
+```
+
+## Development Best Practices
+
+1. **Recommend to use a virtual environment**: This isolates your project dependencies from other Python projects and system packages.
+
+2. **Keep dependencies up to date**: Regularly update your dependencies to get security fixes and new features.
+
+3. **Follow type annotations**: Use type hints throughout the codebase to improve code quality and enable better IDE support.
+
+4. **Handle exceptions properly**: Use specific exception types and proper error handling to make debugging easier.
+
+5. **Write tests**: Ensure your code is tested thoroughly to catch bugs early.
+
+6. **Document your code**: Keep documentation up-to-date, including docstrings and this README.
+
+7. **Use environment variables for configuration**: Never hardcode sensitive information like API keys or database credentials.

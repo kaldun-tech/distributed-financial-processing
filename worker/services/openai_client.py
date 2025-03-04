@@ -6,7 +6,6 @@ import logging
 from typing import Dict, Any
 
 import openai
-from openai.error import APIError, Timeout, RateLimitError, APIConnectionError, InvalidRequestError
 
 from worker.config import config
 from common.models import StructuredFinancialData
@@ -21,21 +20,29 @@ class OpenAIClient:
     Client for interacting with OpenAI's ChatGPT API.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, api_key: str, model: str, max_tokens: int, temperature: float):
         """
         Initialize the OpenAI client.
+        
+        Args:
+            api_key: OpenAI API key
+            model: Model to use
+            max_tokens: Maximum tokens to generate
+            temperature: Temperature for generation
         """
-        self.api_key = config.OPENAI.API_KEY
-        self.model = config.OPENAI.MODEL
-        self.max_tokens = config.OPENAI.MAX_TOKENS
-        self.temperature = config.OPENAI.TEMPERATURE
+        self.api_key = api_key
+        self.model = model
+        self.max_tokens = max_tokens
+        self.temperature = temperature
 
         # Set API key
         openai.api_key = self.api_key
 
+        logger.info("Initialized OpenAI client with model %s", self.model)
+
     def extract_financial_data(self, raw_text: str) -> StructuredFinancialData:
         """
-        Extract structured financial data from raw text using OpenAI's ChatGPT API.
+        Extract structured financial data from raw text.
         
         Args:
             raw_text: Raw financial text
@@ -44,80 +51,63 @@ class OpenAIClient:
             Structured financial data
             
         Raises:
-            APIError: If the OpenAI API returns an error
-            Timeout: If the request times out
-            RateLimitError: If the API rate limit is exceeded
-            APIConnectionError: If there is a connection error
-            InvalidRequestError: If the request is invalid
+            ValueError: If extraction fails
         """
         try:
-            # Create prompt for OpenAI
-            prompt = self._create_extraction_prompt(raw_text)
+            # Create system prompt
+            system_prompt = """
+            You are a financial data extraction assistant. Extract the following information from the given financial text:
+            1. Company name
+            2. Financial metric (e.g., revenue, net income, EBITDA)
+            3. Value (numerical value only)
+            4. Currency (e.g., USD, EUR)
+            5. Quarter (e.g., Q1 2023)
+            
+            Return the extracted information as a JSON object with the following structure:
+            {
+                "company": "Company name",
+                "metric": "Financial metric",
+                "value": "Numerical value (as a string)",
+                "currency": "Currency code",
+                "quarter": "Quarter"
+            }
+            
+            Only include the JSON object in your response, nothing else.
+            """
+
+            # Create user prompt
+            user_prompt = f"Extract financial data from the following text: {raw_text}"
+
+            # Create messages
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ]
 
             # Call OpenAI API
-            response = openai.ChatCompletion.create(
+            response = openai.chat.completions.create(
                 model=self.model,
-                messages=[
-                    {"role": "system", "content": "You are a financial data extraction assistant. Extract structured financial data from the given text."},
-                    {"role": "user", "content": prompt}
-                ],
+                messages=messages,
                 max_tokens=self.max_tokens,
                 temperature=self.temperature
             )
 
-            # Extract response
+            # Extract response text
             response_text = response.choices[0].message.content.strip()
+            
+            # Parse JSON from response
+            extracted_data = self._extract_json_from_text(response_text)
 
-            # Parse JSON response
-            try:
-                extracted_data = json.loads(response_text)
-            except json.JSONDecodeError:
-                # If response is not valid JSON, try to extract it from the text
-                extracted_data = self._extract_json_from_text(response_text)
-
-            # Normalize data
+            # Normalize extracted data
             structured_data = self._normalize_extracted_data(extracted_data, raw_text)
 
-            logger.info("Successfully extracted financial data from raw text")
+            logger.info("Successfully extracted financial data: %s", structured_data)
+
             return structured_data
-        except (APIError, Timeout, RateLimitError, APIConnectionError, InvalidRequestError) as e:
-            logger.error("OpenAI API error: %s", e)
-            raise
+
         except Exception as e:
-            logger.error("Unexpected error when extracting financial data: %s", e)
+            logger.error("Failed to extract financial data: %s", e)
             raise
-
-    def _create_extraction_prompt(self, raw_text: str) -> str:
-        """
-        Create a prompt for extracting financial data.
-        
-        Args:
-            raw_text: Raw financial text
-            
-        Returns:
-            Prompt for OpenAI
-        """
-        return f"""
-        Extract the following financial information from the text below:
-        - Company name
-        - Financial metric (e.g., revenue, net income, profit)
-        - Numerical value
-        - Currency
-        - Time period (quarter/year)
-
-        Text: "{raw_text}"
-
-        Return the extracted information as a JSON object with the following structure:
-        {{
-            "company": "Company name",
-            "metric": "Financial metric",
-            "value": "Raw numerical value as string (e.g., '5.3 million')",
-            "currency": "Currency code (e.g., 'USD')",
-            "quarter": "Financial quarter (e.g., 'Q1 2024')"
-        }}
-
-        Only return the JSON object, nothing else.
-        """
 
     def _extract_json_from_text(self, text: str) -> Dict[str, Any]:
         """
@@ -130,14 +120,20 @@ class OpenAIClient:
             Extracted JSON
             
         Raises:
-            ValueError: If JSON cannot be extracted
+            ValueError: If JSON extraction fails
         """
-        # Find JSON-like structure in the text
+        # Check if the text is already valid JSON
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            pass
+
+        # Try to extract JSON from text
         start_idx = text.find('{')
         end_idx = text.rfind('}')
 
-        if start_idx == -1 or end_idx == -1 or start_idx > end_idx:
-            raise ValueError("Could not extract JSON from OpenAI response")
+        if start_idx == -1 or end_idx == -1:
+            raise ValueError("Could not find JSON in response")
 
         json_str = text[start_idx:end_idx + 1]
 
@@ -164,29 +160,32 @@ class OpenAIClient:
         required_fields = ['company', 'metric', 'value', 'currency', 'quarter']
         for field in required_fields:
             if field not in extracted_data:
-                raise ValueError(f"Missing required field '{field}' in extracted data")
+                raise ValueError(f"Missing required field: {field}")
 
         # Normalize value
-        value_str = extracted_data['value']
-        normalized_value = normalize_financial_value(value_str)
+        value_str = str(extracted_data['value'])
+        value = normalize_financial_value(value_str)
 
-        # Normalize quarter if needed
-        quarter = extracted_data['quarter']
-        if not quarter:
-            # Try to extract quarter from raw text
-            quarter = extract_quarter(raw_text) or "Unknown"
+        # Normalize quarter
+        quarter = extract_quarter(extracted_data['quarter'])
 
         # Create structured data
-        return StructuredFinancialData(
+        structured_data = StructuredFinancialData(
             company=extracted_data['company'],
-            metric=extracted_data['metric'],
-            value=normalized_value,
-            currency=extracted_data['currency'],
+            metric=extracted_data['metric'].lower(),
+            value=value,
+            currency=extracted_data['currency'].upper(),
             quarter=quarter,
-            raw_text=raw_text,
-            metadata={"original_value": value_str}
+            raw_text=raw_text
         )
+
+        return structured_data
 
 
 # Create a singleton instance
-openai_client = OpenAIClient()
+openai_client = OpenAIClient(
+    api_key=config.OPENAI.API_KEY,
+    model=config.OPENAI.MODEL,
+    max_tokens=config.OPENAI.MAX_TOKENS,
+    temperature=config.OPENAI.TEMPERATURE
+)
