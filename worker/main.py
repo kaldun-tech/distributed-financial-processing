@@ -7,7 +7,7 @@ import sys
 import json
 from typing import Dict, Any
 from pymongo.errors import ConnectionFailure
-import openai
+from openai import OpenAIError, APIError, RateLimitError, APIConnectionError, BadRequestError
 from pika.exceptions import AMQPConnectionError, AMQPChannelError
 
 from worker.services.rabbitmq import rabbitmq_consumer
@@ -53,7 +53,7 @@ def process_message(message: Dict[str, Any]) -> None:
         document_id = mongodb_client.insert_one(document)
 
         logger.info("Successfully processed and stored financial data. MongoDB ID: %s", document_id)
-    except (openai.error.APIError, openai.error.Timeout, openai.error.RateLimitError, openai.error.APIConnectionError, openai.error.InvalidRequestError) as e:
+    except (APIError, RateLimitError, APIConnectionError, BadRequestError, OpenAIError) as e:
         logger.error("OpenAI API error while processing message: %s", e)
         # Let the exception propagate to the consumer for proper handling
         raise
@@ -112,7 +112,7 @@ def main() -> None:
     except ConnectionFailure as e:
         logger.error("Failed to connect to MongoDB: %s", e)
         sys.exit(1)
-    except (openai.error.APIError, openai.error.Timeout, openai.error.RateLimitError, openai.error.APIConnectionError, openai.error.InvalidRequestError) as e:
+    except (APIError, RateLimitError, APIConnectionError, BadRequestError, OpenAIError) as e:
         logger.error("OpenAI API error in worker service: %s", e)
         sys.exit(1)
     except AMQPConnectionError as e:

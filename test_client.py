@@ -7,14 +7,31 @@ import json
 import os
 import random
 import sys
-from typing import Optional
+from typing import Optional, List, Union
 
 import requests
 
 
-def submit_financial_data(api_url: str, raw_text: str) -> None:
+def submit_financial_data(api_url: str, raw_text: Union[str, List[str]]) -> None:
     """
     Submit financial data to the API.
+    
+    Args:
+        api_url: URL of the API
+        raw_text: Raw financial text to submit (string or list of strings)
+    """
+    # Handle single string or list of strings
+    if isinstance(raw_text, list):
+        for i, text in enumerate(raw_text):
+            print(f"\nSubmitting item {i+1} of {len(raw_text)}:")
+            _submit_single_item(api_url, text)
+    else:
+        _submit_single_item(api_url, raw_text)
+
+
+def _submit_single_item(api_url: str, raw_text: str) -> None:
+    """
+    Submit a single financial data item to the API.
     
     Args:
         api_url: URL of the API
@@ -53,16 +70,17 @@ def submit_financial_data(api_url: str, raw_text: str) -> None:
         sys.exit(1)
 
 
-def load_csv_data(file_path: str, row_index: Optional[int] = None) -> str:
+def load_csv_data(file_path: str, row_index: Optional[int] = None, random_row: bool = False) -> Union[str, List[str]]:
     """
     Load financial data from a CSV file.
     
     Args:
         file_path: Path to the CSV file containing data
-        row_index: Index of the row to load (if None, a random row or list of rows will be displayed for selection)
+        row_index: Index of the row to load (if provided)
+        random_row: Whether to select a random row
         
     Returns:
-        Raw financial text from the selected row
+        Raw financial text from the selected row(s) - either a single string or a list of strings
     """
     try:
         with open(file_path, 'r', newline='') as f:
@@ -74,46 +92,34 @@ def load_csv_data(file_path: str, row_index: Optional[int] = None) -> str:
             print(f"No data found in {file_path}")
             sys.exit(1)
 
+        # Case 1: Specific row requested
         if row_index is not None:
             if 0 <= row_index < len(rows):
                 return rows[row_index][0]  # Assuming raw_text is in the first column
             else:
                 print(f"Invalid row index: {row_index}. Must be between 0 and {len(rows)-1}")
                 sys.exit(1)
-
-        # Display rows for selection or pick a random one
-        selection_mode = input("Select a row by [n]umber, [r]andom, or [a]ll? (n/r/a): ").lower()
-
-        if selection_mode == 'r':
+                
+        # Case 2: Random row requested
+        if random_row:
             selected_row = random.choice(rows)
-            print(f"Randomly selected: {selected_row[0]}")
+            print(f"Randomly selected row: {selected_row[0][:50]}...")
             return selected_row[0]
-        elif selection_mode == 'a':
-            print("Processing all rows is not implemented yet.")
-            print("Please select a single row for now.")
-            # Fall through to number selection
-
-        # Default to number selection
-        print("Available rows:")
-        for i, row in enumerate(rows):
-            print(f"[{i}] {row[0]}")
-
-        # Get user selection
-        while True:
-            try:
-                selection = int(input("\nSelect a row by number: "))
-                if 0 <= selection < len(rows):
-                    return rows[selection][0]
-                else:
-                    print(f"Invalid selection. Please enter a number between 0 and {len(rows)-1}")
-            except ValueError:
-                print("Please enter a valid number")
+            
+        # Case 3: Default - return all rows
+        return [row[0] for row in rows]
 
     except FileNotFoundError:
         print(f"File not found: {file_path}")
         sys.exit(1)
-    except Exception as e:
-        print(f"Error loading CSV data: {e}")
+    except csv.Error as e:
+        print(f"CSV parsing error: {e}")
+        sys.exit(1)
+    except IOError as e:
+        print(f"I/O error while reading file: {e}")
+        sys.exit(1)
+    except IndexError as e:
+        print(f"Index error while processing CSV data: {e}")
         sys.exit(1)
 
 
@@ -129,7 +135,11 @@ def main() -> None:
     input_group = parser.add_mutually_exclusive_group()
     input_group.add_argument("--text", help="Raw financial text to submit")
     input_group.add_argument("--file", help="Path to a CSV file containing financial data")
-    input_group.add_argument("--row", type=int, help="Row index to use from the CSV file (requires --file)")
+    
+    # Selection options for CSV file
+    selection_group = parser.add_argument_group("Row selection options (only used with --file)")
+    selection_group.add_argument("--row", type=int, help="Specific row index to use from the CSV file")
+    selection_group.add_argument("--random", action="store_true", help="Select a random row from the CSV file")
 
     args = parser.parse_args()
 
@@ -139,7 +149,7 @@ def main() -> None:
     if args.text:
         raw_text = args.text
     elif args.file:
-        raw_text = load_csv_data(args.file, args.row)
+        raw_text = load_csv_data(args.file, args.row, args.random)
     else:
         # Default sample file
         default_sample_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'sample_data.csv')

@@ -5,7 +5,7 @@ import json
 import logging
 from typing import Dict, Any
 
-import openai
+from openai import OpenAI
 
 from worker.config import config
 from common.models import StructuredFinancialData
@@ -35,8 +35,8 @@ class OpenAIClient:
         self.max_tokens = max_tokens
         self.temperature = temperature
 
-        # Set API key
-        openai.api_key = self.api_key
+        # Initialize the OpenAI client with minimal configuration
+        self.client = OpenAI(api_key=self.api_key)
 
         logger.info("Initialized OpenAI client with model %s", self.model)
 
@@ -85,7 +85,7 @@ class OpenAIClient:
             ]
 
             # Call OpenAI API
-            response = openai.chat.completions.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 max_tokens=self.max_tokens,
@@ -94,7 +94,7 @@ class OpenAIClient:
 
             # Extract response text
             response_text = response.choices[0].message.content.strip()
-            
+
             # Parse JSON from response
             extracted_data = self._extract_json_from_text(response_text)
 

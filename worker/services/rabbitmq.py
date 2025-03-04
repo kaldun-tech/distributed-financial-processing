@@ -7,7 +7,7 @@ import pika
 from typing import Dict, Any, Callable, Optional
 from pika.exceptions import AMQPConnectionError, AMQPChannelError
 from pymongo.errors import ConnectionFailure
-import openai
+from openai import OpenAIError, APIError, RateLimitError, APIConnectionError, BadRequestError
 
 from worker.config import config
 from common.utils import deserialize_from_json
@@ -122,7 +122,7 @@ class RabbitMQConsumer:
                 logger.error("Failed to decode message JSON: %s", e)
                 # Negative acknowledgement without requeue for malformed messages
                 ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
-            except (openai.error.APIError, openai.error.Timeout, openai.error.RateLimitError, openai.error.APIConnectionError, openai.error.InvalidRequestError) as e:
+            except (APIError, RateLimitError, APIConnectionError, BadRequestError, OpenAIError) as e:
                 logger.error("OpenAI API error while processing message: %s", e)
                 # Negative acknowledgement with requeue for OpenAI API errors
                 ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
@@ -138,6 +138,10 @@ class RabbitMQConsumer:
                 logger.error("RabbitMQ error while processing message: %s", e)
                 # Let RabbitMQ connection errors propagate
                 raise
+            except Exception as e:
+                logger.error("Unexpected error while consuming messages: %s", e)
+                # Negative acknowledgement without requeue for unexpected errors
+                ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
 
         # Start consuming
         self.channel.basic_consume(

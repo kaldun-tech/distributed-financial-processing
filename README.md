@@ -78,17 +78,17 @@ python test_client.py
 # Submit custom text
 python test_client.py --text "Apple Inc. reported revenue of $89.5 billion for Q4 2023."
 
-# Use sample data from a CSV file
+# Use sample data from a CSV file (processes all rows by default)
 python test_client.py --file data/sample_data.csv
 
 # Use a specific row from the CSV file
 python test_client.py --file data/sample_data.csv --row 3
+
+# Select a random row from the CSV file
+python test_client.py --file data/sample_data.csv --random
 ```
 
-When running the test client without arguments, it will look for the default sample file (`data/sample_data.csv`) and prompt you to:
-- Select a row by number
-- Choose a random row
-- Process all rows (not implemented yet)
+When running the test client without arguments, it will look for the default sample file (`data/sample_data.csv`) and process all rows. If the file doesn't exist, it will use a default sample text.
 
 ## Sample Data
 
