@@ -6,6 +6,8 @@ import logging
 import pika
 from typing import Dict, Any, Callable, Optional
 from pika.exceptions import AMQPConnectionError, AMQPChannelError
+from pymongo.errors import ConnectionFailure
+from openai.error import APIError, Timeout, RateLimitError, APIConnectionError, InvalidRequestError
 
 from worker.config import config
 from common.utils import deserialize_from_json
@@ -120,10 +122,22 @@ class RabbitMQConsumer:
                 logger.error("Failed to decode message JSON: %s", e)
                 # Negative acknowledgement without requeue for malformed messages
                 ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
-            except Exception as e:
-                logger.error("Failed to process message: %s", e)
-                # Negative acknowledgement with requeue for other errors
+            except (APIError, Timeout, RateLimitError, APIConnectionError, InvalidRequestError) as e:
+                logger.error("OpenAI API error while processing message: %s", e)
+                # Negative acknowledgement with requeue for OpenAI API errors
                 ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+            except ConnectionFailure as e:
+                logger.error("MongoDB connection error while processing message: %s", e)
+                # Negative acknowledgement with requeue for MongoDB connection errors
+                ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+            except ValueError as e:
+                logger.error("Value error while processing message: %s", e)
+                # Negative acknowledgement without requeue for value errors
+                ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+            except (AMQPConnectionError, AMQPChannelError) as e:
+                logger.error("RabbitMQ error while processing message: %s", e)
+                # Let RabbitMQ connection errors propagate
+                raise
 
         # Start consuming
         self.channel.basic_consume(

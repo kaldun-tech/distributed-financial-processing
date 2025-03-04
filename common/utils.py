@@ -2,9 +2,9 @@
 Utility functions shared between producer and worker services.
 """
 import json
+import logging
 import re
 from typing import Dict, Any, Optional
-import logging
 
 # Configure logging
 logging.basicConfig(

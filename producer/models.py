@@ -4,8 +4,8 @@ Data models for the producer service.
 from typing import Dict, Any, Optional
 from pydantic import BaseModel, Field
 
-# Re-export common models
-from common.models import RawFinancialData
+# Re-export common models for use in other producer modules
+from common.models import RawFinancialData  # noqa: F401
 
 
 class FinancialDataSubmissionResponse(BaseModel):

@@ -2,16 +2,17 @@
 Worker service for processing financial data.
 """
 import logging
-import json
-import time
 import signal
 import sys
+import json
 from typing import Dict, Any
+from pymongo.errors import ConnectionFailure
+from openai.error import APIError, Timeout, RateLimitError, APIConnectionError, InvalidRequestError
+from pika.exceptions import AMQPConnectionError, AMQPChannelError
 
 from worker.services.rabbitmq import rabbitmq_consumer
 from worker.services.openai_client import openai_client
 from worker.services.mongodb import mongodb_client
-from common.models import StructuredFinancialData
 
 # Configure logging
 logging.basicConfig(
@@ -52,9 +53,26 @@ def process_message(message: Dict[str, Any]) -> None:
         document_id = mongodb_client.insert_one(document)
 
         logger.info("Successfully processed and stored financial data. MongoDB ID: %s", document_id)
-    except Exception as e:
-        logger.error("Failed to process message: %s", e)
+    except (APIError, Timeout, RateLimitError, APIConnectionError, InvalidRequestError) as e:
+        logger.error("OpenAI API error while processing message: %s", e)
         # Let the exception propagate to the consumer for proper handling
+        raise
+    except ConnectionFailure as e:
+        logger.error("MongoDB error while processing message: %s", e)
+        # Let the exception propagate to the consumer for proper handling
+        raise
+    except json.JSONDecodeError as e:
+        logger.error("JSON parsing error while processing message: %s", e)
+        # Let the exception propagate to the consumer for proper handling
+        raise
+    except ValueError as e:
+        logger.error("Value error while processing message: %s", e)
+        # Let the exception propagate to the consumer for proper handling
+        raise
+    except Exception as e:
+        logger.error("Unexpected error while processing message: %s", e)
+        # Let the exception propagate to the consumer for proper handling
+        raise
 
 
 def setup_signal_handlers() -> None:
@@ -91,8 +109,17 @@ def main() -> None:
         rabbitmq_consumer.consume(process_message)
     except KeyboardInterrupt:
         logger.info("Worker service stopped by user")
-    except Exception as e:
-        logger.error("Worker service failed: %s", e)
+    except ConnectionFailure as e:
+        logger.error("Failed to connect to MongoDB: %s", e)
+        sys.exit(1)
+    except (APIError, Timeout, RateLimitError, APIConnectionError, InvalidRequestError) as e:
+        logger.error("OpenAI API error in worker service: %s", e)
+        sys.exit(1)
+    except AMQPConnectionError as e:
+        logger.error("Failed to connect to RabbitMQ: %s", e)
+        sys.exit(1)
+    except AMQPChannelError as e:
+        logger.error("RabbitMQ channel error: %s", e)
         sys.exit(1)
     finally:
         # Close connections

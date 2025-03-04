@@ -1,10 +1,9 @@
 """
 RabbitMQ client for the producer service.
 """
-import json
 import logging
 import pika
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from pika.exceptions import AMQPConnectionError, AMQPChannelError
 
 from producer.config import config

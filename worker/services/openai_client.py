@@ -3,7 +3,8 @@ OpenAI client for the worker service.
 """
 import json
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any
+
 import openai
 from openai.error import APIError, Timeout, RateLimitError, APIConnectionError, InvalidRequestError
 
@@ -143,7 +144,7 @@ class OpenAIClient:
         try:
             return json.loads(json_str)
         except json.JSONDecodeError as e:
-            raise ValueError(f"Could not parse extracted JSON: {e}")
+            raise ValueError(f"Could not parse extracted JSON: {e}") from e
 
     def _normalize_extracted_data(self, extracted_data: Dict[str, Any], raw_text: str) -> StructuredFinancialData:
         """

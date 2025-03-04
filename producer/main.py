@@ -3,6 +3,7 @@ FastAPI application for the producer service.
 """
 import uuid
 import logging
+import pika
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,7 +11,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from producer.config import config
 from producer.models import RawFinancialData, FinancialDataSubmissionResponse
 from producer.services.rabbitmq import rabbitmq_client
-import pika
 
 # Configure logging
 logging.basicConfig(
